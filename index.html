@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DompetKu — Pencatatan Keuangan Pribadi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="nav">
+    <span class="nav-brand">💰 DompetKu</span>
+    <button class="nav-btn active" onclick="nav('dashboard')" id="nb-dashboard">🏠 Dashboard</button>
+    <button class="nav-btn" onclick="nav('transaksi')" id="nb-transaksi">📋 Transaksi</button>
+    <button class="nav-btn" onclick="nav('anggaran')" id="nb-anggaran">🎯 Anggaran</button>
+    <button class="nav-btn" onclick="nav('tabungan')" id="nb-tabungan">🐷 Tabungan</button>
+    <button class="nav-btn" onclick="nav('utang')" id="nb-utang">💳 Utang/Piutang</button>
+    <button class="nav-btn" onclick="nav('investasi')" id="nb-investasi">📈 Investasi</button>
+    <button class="nav-btn" onclick="nav('laporan')" id="nb-laporan">📊 Laporan</button>
+    <button class="nav-btn nav-rates" onclick="openModal('rates')">💱 Kurs</button>
+  </nav>
+  <div class="main" id="view-container"></div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
