@@ -432,12 +432,19 @@ function renderAnggaran(){
 // ==================== TABUNGAN ====================
 function renderTabungan(){
   const savings=getSavings();
-  const totalSaved=savings.reduce((s,sv)=>s+sv.current,0);
+  const totalSaved=savings.reduce((s,sv)=>{
+    const cur=sv.accountId?Math.max(0,calcBalance(sv.accountId)):sv.current;
+    return s+cur;
+  },0);
   const totalTarget=savings.reduce((s,sv)=>s+sv.target,0);
   const cards=savings.map(sv=>{
-    const pct=sv.target>0?Math.min((sv.current/sv.target)*100,100):0;
-    const done=sv.current>=sv.target&&sv.target>0;
-    const remaining=Math.max(0,sv.target-sv.current);
+    // Kalau linked ke akun, ambil saldo akun. Kalau tidak, pakai manual
+    const current=sv.accountId?Math.max(0,calcBalance(sv.accountId)):sv.current;
+    const pct=sv.target>0?Math.min((current/sv.target)*100,100):0;
+    const done=current>=sv.target&&sv.target>0;
+    const remaining=Math.max(0,sv.target-current);
+    const linkedAcc=sv.accountId?getAccounts().find(a=>a.id===sv.accountId):null;
+    const linkedBadge=linkedAcc?`<span style="font-size:10px;background:var(--blue-bg);color:var(--blue);padding:1px 7px;border-radius:99px;margin-left:5px">🔗 ${esc(linkedAcc.name)}</span>`:'';
     let deadline='';
     if(sv.deadline){
       const d=new Date(sv.deadline),now=new Date();
@@ -447,15 +454,26 @@ function renderTabungan(){
     }
     return`<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div><div style="font-size:14px;font-weight:500;display:flex;align-items:center;gap:5px">${done?'<span style="color:var(--green)">✓</span>':''}${esc(sv.name)}</div>${deadline}</div>
+        <div>
+          <div style="font-size:14px;font-weight:500;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+            ${done?'<span style="color:var(--green)">✓</span>':''}${esc(sv.name)}${linkedBadge}
+          </div>
+          ${deadline}
+        </div>
         <div style="display:flex;gap:2px">
           <button class="btn-icon" onclick="editSaving('${sv.id}')">✏️</button>
           <button class="btn-icon" style="color:var(--red)" onclick="deleteSaving('${sv.id}')">🗑️</button>
         </div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text2)">${fmtFull(sv.current)}</span><span style="font-weight:500">${fmtFull(sv.target)}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px">
+        <span style="color:var(--text2)">${fmtAcc(current)}</span>
+        <span style="font-weight:500">${fmtAcc(sv.target)}</span>
+      </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${done?'var(--green)':'var(--blue)'}"></div></div>
-      <div style="font-size:11px;color:var(--text2);margin-top:4px">${Math.round(pct)}% terkumpul · Kurang ${fmtFull(remaining)}</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:4px">
+        ${Math.round(pct)}% terkumpul · Kurang ${fmtAcc(remaining)}
+        ${linkedAcc?`<span style="color:var(--blue)"> · otomatis dari saldo akun</span>`:''}
+      </div>
     </div>`;
   }).join('');
   return`<div class="row"><h2 class="h2">Target Tabungan</h2><button class="btn-p" onclick="openModal('saving')">+ Tambah Target</button></div>
@@ -556,7 +574,7 @@ function sf(k,v){
   tmpForm[k]=v;
   // Hanya re-render kalau perlu ubah tampilan modal
   // (toggle tipe, pilih currency buat conversion hint, pilih akun)
-  if(k==='type'||k==='currency'||k==='accType'){
+  if(k==='type'||k==='currency'||k==='accType'||k==='accountId'){
     renderModal();
   }
 }
@@ -603,9 +621,21 @@ function renderModal(){
     body=`<div class="fg"><label>Kategori</label><select class="sel" onchange="sf('category',this.value)">${catOpts}</select></div>
     <div class="fg"><label>Batas Anggaran (IDR)</label><input class="inp" type="number" placeholder="0" value="${tmpForm.limit||''}" oninput="sf('limit',this.value)"></div>`;
   }else if(currentModalType==='saving'){
+    const accounts=getAccounts();
+    const accOpts=accounts.map(a=>`<option value="${a.id}"${tmpForm.accountId===a.id?' selected':''}>${esc(a.name)}</option>`).join('');
+    const isLinked=!!tmpForm.accountId;
+    const linkedBal=isLinked?calcBalance(tmpForm.accountId):0;
     body=`<div class="fg"><label>Nama Target</label><input class="inp" placeholder="Dana Darurat, Liburan, Gadget baru..." value="${esc(tmpForm.name||'')}" oninput="sf('name',this.value)"></div>
     <div class="fg"><label>Target (IDR)</label><input class="inp" type="number" placeholder="0" value="${tmpForm.target||''}" oninput="sf('target',this.value)"></div>
-    <div class="fg"><label>Sudah Terkumpul (IDR)</label><input class="inp" type="number" placeholder="0" value="${tmpForm.current||'0'}" oninput="sf('current',this.value)"></div>
+    <div class="fg"><label>Link ke Akun <span style="font-size:11px;color:var(--text2)">(opsional — saldo akun jadi patokan terkumpul)</span></label>
+      <select class="sel" onchange="sf('accountId',this.value)">
+        <option value="">-- Manual / Tidak di-link --</option>${accOpts}
+      </select>
+    </div>
+    ${isLinked
+      ? `<div style="background:var(--blue-bg);border-radius:var(--radius);padding:.6rem .875rem;font-size:13px;color:var(--blue);margin-bottom:.7rem">🔗 Saldo akun saat ini: <strong>${fmtAcc(linkedBal)}</strong> — akan otomatis terupdate</div>`
+      : `<div class="fg"><label>Sudah Terkumpul (IDR)</label><input class="inp" type="number" placeholder="0" value="${tmpForm.current||'0'}" oninput="sf('current',this.value)"></div>`
+    }
     <div class="fg"><label>Deadline (opsional)</label><input class="inp" type="date" value="${tmpForm.deadline||''}" oninput="sf('deadline',this.value)"></div>`;
   }else if(currentModalType==='debt'){
     const isU=tmpForm.type==='utang';
@@ -672,7 +702,13 @@ function saveModal(){
     else setBudgets([...budgets,{id:uid(),category:tmpForm.category,limit:parseFloat(tmpForm.limit),month:fMonth}]);
   }else if(currentModalType==='saving'){
     if(!tmpForm.name||!tmpForm.target)return alert('Isi nama dan target!');
-    const item={name:tmpForm.name,target:parseFloat(tmpForm.target)||0,current:parseFloat(tmpForm.current)||0,deadline:tmpForm.deadline||''};
+    const item={
+      name:tmpForm.name,
+      target:parseFloat(tmpForm.target)||0,
+      current:tmpForm.accountId?0:parseFloat(tmpForm.current)||0,
+      accountId:tmpForm.accountId||'',
+      deadline:tmpForm.deadline||''
+    };
     if(editId)setSavings(getSavings().map(s=>s.id===editId?{...s,...item}:s));
     else setSavings([...getSavings(),{id:uid(),...item}]);
   }else if(currentModalType==='debt'){
