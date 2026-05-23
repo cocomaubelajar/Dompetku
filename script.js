@@ -546,7 +546,14 @@ function editSaving(id){const s=getSavings().find(x=>x.id===id);if(s)openModal('
 function editInv(id){const inv=getInv().find(x=>x.id===id);if(inv)openModal('inv',inv)}
 function editAcc(id){const acc=getAccounts().find(x=>x.id===id);if(acc){currentModalType='account';editId=id;tmpForm={...acc,initialBalance:String(acc.initialBalance||0),accType:acc.type};renderModal();document.getElementById('overlay').style.display='flex';}}
 function closeModal(){document.getElementById('overlay').style.display='none';tmpForm={};editId=null;tmpRates={};}
-function sf(k,v){tmpForm[k]=v;renderModal()}
+function sf(k,v){
+  tmpForm[k]=v;
+  // Hanya re-render kalau perlu ubah tampilan modal
+  // (toggle tipe, pilih currency buat conversion hint, pilih akun)
+  if(k==='type'||k==='currency'||k==='accType'){
+    renderModal();
+  }
+}
 function sfr(k,v){tmpRates[k]=v;}
 
 function renderModal(){
