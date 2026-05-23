@@ -105,25 +105,76 @@ function calcBalance(id){
 function calcTotalBalance(){return getAccounts().reduce((s,a)=>s+calcBalance(a.id),0)}
 
 // ==================== GOOGLE SHEETS SYNC ====================
-function updateSyncDot(){
+function updateSyncDot(s){
+  if(s)setSyncStatus(s);
   const el=document.getElementById('sync-dot');
   if(el)el.className='sync-dot s-'+getSyncStatus();
 }
+
 async function syncSheets(action,payload){
   if(!getSyncEnabled())return;
   try{
-    setSyncStatus('pending');
+    updateSyncDot('pending');
     await fetch(SHEETS_URL,{
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
       body:JSON.stringify({action,payload,ts:new Date().toISOString()})
     });
-    setSyncStatus('ok');
+    updateSyncDot('ok');
     setLastSync(new Date().toLocaleString('id-ID'));
   }catch(e){
-    setSyncStatus('error');
+    updateSyncDot('error');
     console.error('Sync error:',e);
   }
+}
+
+// Tarik semua data dari Sheets → simpan ke localStorage → render
+async function pullFromSheets(silent){
+  if(!getSyncEnabled())return;
+  if(!silent){
+    updateSyncDot('pending');
+  }
+  try{
+    const res=await fetch(SHEETS_URL+'?t='+Date.now());
+    const data=await res.json();
+    if(data.status!=='ok')throw new Error(data.message||'Error');
+
+    // Simpan transaksi dari Sheets ke localStorage
+    if(Array.isArray(data.transactions)&&data.transactions.length>0){
+      // Gabung: data Sheets jadi acuan, tambahkan data lokal yang belum ada di Sheets
+      const sheetsIds=new Set(data.transactions.map(t=>t.id));
+      const localOnly=getTx().filter(t=>!sheetsIds.has(t.id));
+      ss('dk_tx',[...data.transactions,...localOnly]);
+    }
+    if(Array.isArray(data.transfers)&&data.transfers.length>0){
+      const sheetsIds=new Set(data.transfers.map(t=>t.id));
+      const localOnly=getTransfers().filter(t=>!sheetsIds.has(t.id));
+      ss('dk_transfers',[...data.transfers,...localOnly]);
+    }
+
+    updateSyncDot('ok');
+    setLastSync(new Date().toLocaleString('id-ID'));
+    render();
+    if(!silent)showToast('✓ Data berhasil ditarik dari Google Sheets');
+  }catch(e){
+    updateSyncDot('error');
+    console.error('Pull error:',e);
+    if(!silent)showToast('✗ Gagal tarik data — cek koneksi');
+  }
+}
+
+function showToast(msg){
+  let el=document.getElementById('toast');
+  if(!el){
+    el=document.createElement('div');
+    el.id='toast';
+    el.style.cssText='position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:.5rem 1.25rem;border-radius:99px;font-size:13px;z-index:9999;transition:opacity .3s;white-space:nowrap';
+    document.body.appendChild(el);
+  }
+  el.textContent=msg;
+  el.style.opacity='1';
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>{el.style.opacity='0'},3000);
 }
 
 // ==================== NAVIGATION ====================
@@ -655,20 +706,28 @@ function renderModal(){
   }else if(currentModalType==='settings'){
     const st=getSyncStatus(),ls=getLastSync(),en=getSyncEnabled();
     const stColor=st==='ok'?'var(--green)':st==='error'?'var(--red)':'var(--text3)';
-    const stLabel=st==='ok'?`✓ Terakhir sync: ${ls}`:st==='error'?'✗ Gagal — cek koneksi':'Belum pernah sync';
-    body=`<div class="info-banner" style="margin-bottom:12px">📊 <span>Data transaksi & transfer otomatis masuk ke Google Sheets setiap kali disimpan.</span></div>
+    const stIcon=st==='ok'?'🟢':st==='error'?'🔴':'⚪';
+    const stLabel=st==='ok'?`Tersinkron · ${ls}`:st==='error'?'Gagal — cek koneksi internet':'Belum sync';
+    body=`<div class="info-banner" style="margin-bottom:12px">📊 <span>Data otomatis masuk ke Google Sheets setiap simpan, dan ditarik saat buka app di perangkat manapun.</span></div>
     <div style="background:var(--bg3);border-radius:var(--radius);padding:.75rem;margin-bottom:12px">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Google Sheets URL</div>
-      <div style="font-size:11px;color:var(--text3);word-break:break-all">${SHEETS_URL.substring(0,60)}...</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Google Sheets URL</div>
+      <div style="font-size:11px;color:var(--text3);word-break:break-all">${SHEETS_URL.substring(0,55)}...</div>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <span style="font-size:13px">Auto-sync aktif</span>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
         <input type="checkbox" id="sync-toggle" ${en?'checked':''} onchange="setSyncEnabled(this.checked)">
         <span style="font-size:13px">${en?'Ya':'Tidak'}</span>
       </label>
     </div>
-    <div style="font-size:12px;color:${stColor}">${stLabel}</div>`;
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .875rem;background:var(--bg3);border-radius:var(--radius);margin-bottom:12px">
+      <div>
+        <div style="font-size:12px;font-weight:500">${stIcon} Status</div>
+        <div style="font-size:11px;color:${stColor};margin-top:2px">${stLabel}</div>
+      </div>
+    </div>
+    <button class="btn-p" style="width:100%;justify-content:center;gap:8px" onclick="closeModal();pullFromSheets(false)">☁️ Tarik Data Terbaru dari Cloud</button>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">Gunakan tombol ini saat ganti perangkat atau data tidak sinkron</div>`;
   }
   document.getElementById('modal-content').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><span style="font-size:15px;font-weight:500">${titles[currentModalType]||''}</span><button class="btn-icon" onclick="closeModal()" style="font-size:16px">✕</button></div>${body}<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px"><button class="btn" onclick="closeModal()">Batal</button><button class="btn-p" onclick="saveModal()">✓ Simpan</button></div>`;
 }
@@ -758,3 +817,7 @@ function exportCSV(){
 
 // ==================== INIT ====================
 render();
+// Auto-tarik data dari Sheets saat pertama buka
+if(getSyncEnabled()){
+  pullFromSheets(true);
+}
