@@ -77,6 +77,12 @@ function fmtFull(n){
   const s=n<0?'-':'';
   return`${s}Rp ${Math.abs(Math.round(n)).toLocaleString('id-ID')}`;
 }
+// Format lengkap dengan 2 desimal — untuk saldo akun
+function fmtAcc(n){
+  if(n===undefined||n===null||isNaN(n))return'Rp 0,00';
+  const s=n<0?'-':'';
+  return`${s}Rp ${Math.abs(n).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function polarToXY(cx,cy,r,angle){
   const rad=(angle*Math.PI)/180;
@@ -230,7 +236,7 @@ function renderDashboard(){
     const at=ACC_TYPES.find(t=>t.id===a.type);
     return`<div class="acc-card"><div class="acc-stripe" style="background:${a.color||at?.color||'#888'}"></div>
     <div style="font-size:11px;color:var(--text2);margin-bottom:3px">${at?.icon||'💰'} ${esc(a.name)}</div>
-    <div style="font-size:15px;font-weight:600;color:${bal<0?'var(--red)':'var(--text)'}">${fmtIDR(bal)}</div>
+    <div style="font-size:15px;font-weight:600;color:${bal<0?'var(--red)':'var(--text)'}">${fmtAcc(bal)}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">${at?.label||''}</div></div>`;
   }).join(''):`<div style="font-size:13px;color:var(--text3);padding:.5rem 0">Tambahkan akun di menu 💼 Akun</div>`;
 
@@ -240,7 +246,7 @@ function renderDashboard(){
     <input type="month" class="inp" style="width:140px;font-size:13px" value="${fMonth}" onchange="setMonth(this.value)">
   </div>
   <div class="g4" style="margin-bottom:14px">
-    <div class="metric"><div class="metric-label">Total Saldo</div><div class="metric-val" style="color:var(--blue)">${fmtIDR(totalBal)}</div></div>
+    <div class="metric"><div class="metric-label">Total Saldo</div><div class="metric-val" style="color:var(--blue)">${fmtAcc(totalBal)}</div></div>
     <div class="metric"><div class="metric-label">Pemasukan Bln Ini</div><div class="metric-val" style="color:var(--green)">${fmtIDR(income)}</div></div>
     <div class="metric"><div class="metric-label">Pengeluaran Bln Ini</div><div class="metric-val" style="color:var(--red)">${fmtIDR(expense)}</div></div>
     <div class="metric"><div class="metric-label">Net Worth</div><div class="metric-val" style="color:var(--blue)">${fmtIDR(netWorth)}</div></div>
@@ -298,8 +304,8 @@ function renderAkun(){
             <button class="btn-icon" style="color:var(--red)" onclick="deleteAcc('${a.id}')">🗑️</button>
           </div>
         </div>
-        <div style="font-size:20px;font-weight:600;color:${bal<0?'var(--red)':'var(--green)'}">${fmtIDR(bal)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:3px">Modal awal: ${fmtIDR(a.initialBalance||0)}</div>
+        <div style="font-size:20px;font-weight:600;color:${bal<0?'var(--red)':'var(--green)'}">${fmtAcc(bal)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">Modal awal: ${fmtAcc(a.initialBalance||0)}</div>
       </div>`;
     }).join('')+`</div>`;
   const tRows=transfers.slice(0,15).map(t=>{
@@ -323,7 +329,7 @@ function renderAkun(){
   </div>
   <div class="metric" style="margin-bottom:12px">
     <div class="metric-label">Total Saldo Semua Akun</div>
-    <div class="metric-val" style="font-size:22px;color:${totalBal>=0?'var(--blue)':'var(--red)'}">${fmtFull(totalBal)}</div>
+    <div class="metric-val" style="font-size:22px;color:${totalBal>=0?'var(--blue)':'var(--red)'}">${fmtAcc(totalBal)}</div>
   </div>
   ${cards}
   <div class="card">
