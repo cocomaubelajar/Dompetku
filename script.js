@@ -22,7 +22,7 @@ const ACC_TYPES=[
 ];
 
 // URL Google Sheets — sudah terpasang
-const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwvaNsHCyQO_D_QMQz2csb6dTWwmLOL9ZGGRhmmlPXwxN-KpbQvwNJ9YhAX7LShlFM/exec';
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwrxeSR4HKXJpe5yNnW6cdjXv9H4c5dwBAaxkjmL9Ax27ZsqePTVRyyruNVOvaQ4Lc/exec';
 
 // ==================== STATE ====================
 let currentView='dashboard';
@@ -111,15 +111,18 @@ function updateSyncDot(s){
   if(el)el.className='sync-dot s-'+getSyncStatus();
 }
 
+// PUSH ke Sheets — pakai no-cors supaya tidak kena CORS block
 async function syncSheets(action,payload){
   if(!getSyncEnabled())return;
+  updateSyncDot('pending');
   try{
-    updateSyncDot('pending');
-    await fetch(SHEETS_URL,{
+    // no-cors: data terkirim tapi response tidak bisa dibaca — ini normal untuk Apps Script
+    fetch(SHEETS_URL,{
       method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      mode:'no-cors',
       body:JSON.stringify({action,payload,ts:new Date().toISOString()})
     });
+    // Optimistic — jika gagal akan terlihat saat pull
     updateSyncDot('ok');
     setLastSync(new Date().toLocaleString('id-ID'));
   }catch(e){
@@ -128,38 +131,38 @@ async function syncSheets(action,payload){
   }
 }
 
-// Tarik semua data dari Sheets → simpan ke localStorage → render
+// PULL dari Sheets — GET request (tidak kena CORS block)
 async function pullFromSheets(silent){
   if(!getSyncEnabled())return;
-  if(!silent){
-    updateSyncDot('pending');
-  }
+  if(!silent)updateSyncDot('pending');
   try{
     const res=await fetch(SHEETS_URL+'?t='+Date.now());
+    if(!res.ok)throw new Error('HTTP '+res.status);
     const data=await res.json();
-    if(data.status!=='ok')throw new Error(data.message||'Error');
+    if(data.status!=='ok')throw new Error(data.message||'Error dari Sheets');
 
-    // Simpan transaksi dari Sheets ke localStorage
+    let changed=false;
     if(Array.isArray(data.transactions)&&data.transactions.length>0){
-      // Gabung: data Sheets jadi acuan, tambahkan data lokal yang belum ada di Sheets
       const sheetsIds=new Set(data.transactions.map(t=>t.id));
       const localOnly=getTx().filter(t=>!sheetsIds.has(t.id));
       ss('dk_tx',[...data.transactions,...localOnly]);
+      changed=true;
     }
     if(Array.isArray(data.transfers)&&data.transfers.length>0){
       const sheetsIds=new Set(data.transfers.map(t=>t.id));
       const localOnly=getTransfers().filter(t=>!sheetsIds.has(t.id));
       ss('dk_transfers',[...data.transfers,...localOnly]);
+      changed=true;
     }
 
     updateSyncDot('ok');
     setLastSync(new Date().toLocaleString('id-ID'));
-    render();
+    if(changed)render();
     if(!silent)showToast('✓ Data berhasil ditarik dari Google Sheets');
   }catch(e){
     updateSyncDot('error');
     console.error('Pull error:',e);
-    if(!silent)showToast('✗ Gagal tarik data — cek koneksi');
+    if(!silent)showToast('✗ Gagal tarik data — pastikan URL Apps Script sudah benar');
   }
 }
 
@@ -168,7 +171,7 @@ function showToast(msg){
   if(!el){
     el=document.createElement('div');
     el.id='toast';
-    el.style.cssText='position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:.5rem 1.25rem;border-radius:99px;font-size:13px;z-index:9999;transition:opacity .3s;white-space:nowrap';
+    el.style.cssText='position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:.5rem 1.25rem;border-radius:99px;font-size:13px;z-index:9999;transition:opacity .3s;white-space:nowrap;pointer-events:none';
     document.body.appendChild(el);
   }
   el.textContent=msg;
