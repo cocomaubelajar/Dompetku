@@ -22,7 +22,7 @@ const ACC_TYPES=[
 ];
 
 // URL Google Sheets — sudah terpasang
-const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwrxeSR4HKXJpe5yNnW6cdjXv9H4c5dwBAaxkjmL9Ax27ZsqePTVRyyruNVOvaQ4Lc/exec';
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFgrR_jKIj_q2EDc3bHd9p5OTcATxUdoy1g7tsLnt-NNh774O_5d47oL_moDhsvuQ/exec';
 
 // ==================== STATE ====================
 let currentView='dashboard';
@@ -111,18 +111,20 @@ function updateSyncDot(s){
   if(el)el.className='sync-dot s-'+getSyncStatus();
 }
 
-// PUSH ke Sheets — pakai no-cors supaya tidak kena CORS block
+// PUSH ke Sheets — pakai GET supaya 100% bebas CORS
 async function syncSheets(action,payload){
   if(!getSyncEnabled())return;
   updateSyncDot('pending');
   try{
-    // no-cors: data terkirim tapi response tidak bisa dibaca — ini normal untuk Apps Script
-    fetch(SHEETS_URL,{
-      method:'POST',
-      mode:'no-cors',
-      body:JSON.stringify({action,payload,ts:new Date().toISOString()})
+    const params=new URLSearchParams({
+      method:action,
+      payload:JSON.stringify(payload),
+      t:Date.now()
     });
-    // Optimistic — jika gagal akan terlihat saat pull
+    const res=await fetch(SHEETS_URL+'?'+params.toString());
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    if(data.status!=='ok')throw new Error(data.message||'Error');
     updateSyncDot('ok');
     setLastSync(new Date().toLocaleString('id-ID'));
   }catch(e){
@@ -131,7 +133,7 @@ async function syncSheets(action,payload){
   }
 }
 
-// PULL dari Sheets — GET request (tidak kena CORS block)
+// PULL dari Sheets — GET tanpa parameter = baca semua data
 async function pullFromSheets(silent){
   if(!getSyncEnabled())return;
   if(!silent)updateSyncDot('pending');
@@ -158,11 +160,11 @@ async function pullFromSheets(silent){
     updateSyncDot('ok');
     setLastSync(new Date().toLocaleString('id-ID'));
     if(changed)render();
-    if(!silent)showToast('✓ Data berhasil ditarik dari Google Sheets');
+    if(!silent)showToast('✓ Data berhasil disinkronkan');
   }catch(e){
     updateSyncDot('error');
     console.error('Pull error:',e);
-    if(!silent)showToast('✗ Gagal tarik data — pastikan URL Apps Script sudah benar');
+    if(!silent)showToast('✗ Gagal — cek URL Apps Script di ⚙️');
   }
 }
 
